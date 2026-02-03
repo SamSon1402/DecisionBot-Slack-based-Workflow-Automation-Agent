@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DecisionBot — Slack Workflow Agent | Gorgias Decision Intelligence</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;0,6..12,800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --slack-purple: #4A154B;
+            --slack-green: #2EB67D;
+            --slack-blue: #36C5F0;
+            --slack-yellow: #ECB22E;
+            --slack-red: #E01E5A;
+            --bot-accent: #7c3aed;
+            --bot-glow: rgba(124, 58, 237, 0.3);
+            --bg-0: #1a1d21;
+            --bg-sidebar: #19171D;
+            --bg-1: #222529;
+            --bg-2: #2c2f33;
+            --bg-3: #383b3f;
+            --text-0: #d1d2d3;
+            --text-1: #ababad;
+            --text-2: #8b8c8e;
+            --text-bright: #f8f8f8;
+            --border: #393b40;
+            --hover: rgba(255,255,255,0.04);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Nunito Sans', sans-serif;
+            background: var(--bg-0);
+            color: var(--text-0);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Slack Layout */
+        .slack-layout {
+            display: grid;
+            grid-template-columns: 260px 1fr 340px;
+            height: 100vh;
+        }
+
+        @media (max-width: 1200px) {
+            .slack-layout { grid-template-columns: 220px 1fr; }
+            .right-panel { display: none; }
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-sidebar);
+            border-right: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .workspace-name {
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--text-bright);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .ws-status {
+            width: 8px; height: 8px;
+            background: var(--slack-green);
+            border-radius: 50%;
+        }
+
+        .ws-sub {
+            font-size: 0.62rem;
+            color: var(--text-2);
+            margin-top: 0.1rem;
+        }
+
+        .sidebar-section {
+            padding: 0.75rem 0.75rem 0.25rem;
+        }
+
+        .section-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--text-2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0 0.4rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .channel-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            color: var(--text-1);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .channel-item:hover { background: var(--hover); }
+        .channel-item.active {
+            background: rgba(124, 58, 237, 0.15);
+            color: var(--text-bright);
+        }
+
+        .ch-hash {
+            font-size: 0.9rem;
+            opacity: 0.5;
+        }
+
+        .ch-unread {
+            margin-left: auto;
+            background: var(--slack-red);
+            color: white;
+            font-size: 0.55rem;
+            font-weight: 700;
+            padding: 0.08rem 0.35rem;
+            border-radius: 10px;
+        }
+
+        .dm-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            color: var(--text-1);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .dm-item:hover { background: var(--hover); }
+
+        .dm-avatar {
+            width: 20px; height: 20px;
+            border-radius: 4px;
+            display: grid;
+            place-items: center;
+            font-size: 0.55rem;
+        }
+
+        .dm-status {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            margin-left: auto;
+        }
+
+        .dm-status.online { background: var(--slack-green); }
+        .dm-status.away { background: var(--slack-yellow); }
+
+        /* Main Chat */
+        .main-chat {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-0);
+        }
+
+        .chat-header {
+            padding: 0.65rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-0);
+        }
+
+        .ch-left {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .ch-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-bright);
+        }
+
+        .ch-desc {
+            font-size: 0.65rem;
+            color: var(--text-2);
+        }
+
+        .ch-right {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .ch-badge {
+            padding: 0.2rem 0.5rem;
+            background: var(--bg-2);
+            border-radius: 4px;
+            font-size: 0.58rem;
+            color: var(--text-2);
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Messages */
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem 1.25rem;
+        }
+
+        .msg-group {
+            margin-bottom: 0.75rem;
+        }
+
+        .msg-row {
+            display: flex;
+            gap: 0.6rem;
+            padding: 0.35rem 0;
+            animation: msgSlide 0.3s ease;
+        }
+
+        @keyframes msgSlide {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .msg-avatar {
+            width: 36px; height: 36px;
+            border-radius: 6px;
+            display: grid;
+            place-items: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .msg-avatar.bot {
+            background: linear-gradient(135deg, #7c3aed, #3b82f6);
+            box-shadow: 0 0 12px var(--bot-glow);
+        }
+
+        .msg-avatar.user { background: var(--bg-3); }
+        .msg-avatar.system { background: rgba(236, 178, 46, 0.2); }
+
+        .msg-body { flex: 1; min-width: 0; }
+
+        .msg-header {
+            display: flex;
+            align-items: baseline;
+            gap: 0.4rem;
+            margin-bottom: 0.15rem;
+        }
+
+        .msg-author {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--text-bright);
+        }
+
+        .msg-author.bot-name { color: var(--bot-accent); }
+
+        .msg-app {
+            font-size: 0.55rem;
+            padding: 0.08rem 0.3rem;
+            background: rgba(124, 58, 237, 0.15);
+            color: var(--bot-accent);
+            border-radius: 3px;
+            font-family: 'Fira Code', monospace;
+        }
+
+        .msg-time {
+            font-size: 0.6rem;
+            color: var(--text-2);
+        }
+
+        .msg-text {
+            font-size: 0.85rem;
+            color: var(--text-0);
+            line-height: 1.55;
+        }
+
+        .msg-text strong { color: var(--text-bright); }
+
+        /* Bot Blocks */
+        .bot-block {
+            background: var(--bg-1);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--bot-accent);
+            border-radius: 0 8px 8px 0;
+            padding: 0.75rem;
+            margin-top: 0.4rem;
+            max-width: 600px;
+        }
+
+        .bb-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-bright);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .bb-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.72rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .bb-table th {
+            text-align: left;
+            padding: 0.35rem 0.5rem;
+            font-size: 0.6rem;
+            color: var(--text-2);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+            font-family: 'Fira Code', monospace;
+        }
+
+        .bb-table td {
+            padding: 0.35rem 0.5rem;
+            border-bottom: 1px solid rgba(57, 59, 64, 0.5);
+            color: var(--text-0);
+        }
+
+        .bb-table tr:last-child td { border-bottom: none; }
+
+        .td-g { color: var(--slack-green); font-weight: 600; }
+        .td-y { color: var(--slack-yellow); font-weight: 600; }
+        .td-r { color: var(--slack-red); font-weight: 600; }
+        .td-b { color: var(--slack-blue); font-weight: 600; }
+
+        .bb-footer {
+            display: flex;
+            gap: 0.35rem;
+            margin-top: 0.5rem;
+        }
+
+        .bb-btn {
+            padding: 0.35rem 0.7rem;
+            background: var(--bg-2);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-0);
+            font-family: 'Nunito Sans', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .bb-btn:hover {
+            background: rgba(124, 58, 237, 0.1);
+            border-color: var(--bot-accent);
+        }
+
+        .bb-btn.primary {
+            background: var(--bot-accent);
+            border-color: var(--bot-accent);
+            color: white;
+        }
+
+        .bb-btn.primary:hover { filter: brightness(1.15); }
+
+        .bb-btn.danger {
+            color: var(--slack-red);
+        }
+
+        .bb-btn.danger:hover {
+            background: rgba(224, 30, 90, 0.1);
+            border-color: var(--slack-red);
+        }
+
+        /* Alert Block */
+        .alert-block {
+            background: rgba(224, 30, 90, 0.06);
+            border: 1px solid rgba(224, 30, 90, 0.2);
+            border-left: 3px solid var(--slack-red);
+            border-radius: 0 8px 8px 0;
+            padding: 0.75rem;
+            margin-top: 0.4rem;
+            max-width: 600px;
+        }
+
+        .alert-block .bb-title { color: var(--slack-red); }
+
+        /* Success Block */
+        .success-block {
+            background: rgba(46, 182, 125, 0.06);
+            border: 1px solid rgba(46, 182, 125, 0.2);
+            border-left: 3px solid var(--slack-green);
+            border-radius: 0 8px 8px 0;
+            padding: 0.75rem;
+            margin-top: 0.4rem;
+            max-width: 600px;
+        }
+
+        .success-block .bb-title { color: var(--slack-green); }
+
+        /* Metric mini bar */
+        .mini-bar-track {
+            height: 4px;
+            background: var(--bg-3);
+            border-radius: 2px;
+            margin-top: 0.25rem;
+            overflow: hidden;
+        }
+
+        .mini-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.6s;
+        }
+
+        /* Thread indicator */
+        .thread-replies {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            margin-top: 0.35rem;
+            padding: 0.25rem 0;
+            cursor: pointer;
+            font-size: 0.7rem;
+            color: var(--slack-blue);
+            font-weight: 600;
+        }
+
+        .thread-replies:hover { text-decoration: underline; }
+
+        .thread-avatars {
+            display: flex;
+        }
+
+        .thread-avatars .mini-av {
+            width: 18px; height: 18px;
+            border-radius: 3px;
+            border: 2px solid var(--bg-0);
+            margin-left: -4px;
+            display: grid;
+            place-items: center;
+            font-size: 0.45rem;
+        }
+
+        /* Divider */
+        .day-divider {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin: 0.75rem 0;
+        }
+
+        .day-divider::before,
+        .day-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .day-divider span {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: var(--text-2);
+            padding: 0.15rem 0.75rem;
+            background: var(--bg-1);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+        }
+
+        /* Chat Input */
+        .chat-input-area {
+            padding: 0.65rem 1.25rem 0.85rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .input-wrapper {
+            background: var(--bg-1);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .input-row {
+            display: flex;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 0.7rem 0.85rem;
+            background: transparent;
+            border: none;
+            color: var(--text-0);
+            font-family: 'Nunito Sans', sans-serif;
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .chat-input::placeholder { color: var(--text-2); }
+
+        .input-actions {
+            display: flex;
+            align-items: center;
+            padding: 0 0.5rem;
+            gap: 0.3rem;
+        }
+
+        .ia-btn {
+            width: 28px; height: 28px;
+            display: grid;
+            place-items: center;
+            background: none;
+            border: none;
+            color: var(--text-2);
+            font-size: 0.9rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s;
+        }
+
+        .ia-btn:hover { background: var(--hover); color: var(--text-0); }
+        .ia-btn.send { background: var(--bot-accent); color: white; border-radius: 4px; }
+        .ia-btn.send:hover { filter: brightness(1.15); }
+
+        .input-hint {
+            padding: 0.3rem 0.85rem 0.45rem;
+            border-top: 1px solid rgba(57, 59, 64, 0.5);
+            display: flex;
+            gap: 0.6rem;
+        }
+
+        .slash-cmd {
+            font-size: 0.6rem;
+            color: var(--text-2);
+            font-family: 'Fira Code', monospace;
+            cursor: pointer;
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            transition: all 0.15s;
+        }
+
+        .slash-cmd:hover {
+            background: rgba(124, 58, 237, 0.1);
+            color: var(--bot-accent);
+        }
+
+        /* Right Panel */
+        .right-panel {
+            border-left: 1px solid var(--border);
+            background: var(--bg-1);
+            overflow-y: auto;
+        }
+
+        .rp-header {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--text-bright);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .workflow-card {
+            margin: 0.6rem;
+            padding: 0.7rem;
+            background: var(--bg-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .workflow-card:hover {
+            border-color: var(--bot-accent);
+        }
+
+        .wf-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.35rem;
+        }
+
+        .wf-name {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-bright);
+        }
+
+        .wf-status {
+            font-size: 0.5rem;
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            font-family: 'Fira Code', monospace;
+        }
+
+        .wf-status.active { background: rgba(46, 182, 125, 0.15); color: var(--slack-green); }
+        .wf-status.paused { background: rgba(236, 178, 46, 0.15); color: var(--slack-yellow); }
+
+        .wf-desc {
+            font-size: 0.65rem;
+            color: var(--text-2);
+            line-height: 1.4;
+            margin-bottom: 0.35rem;
+        }
+
+        .wf-meta {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.55rem;
+            font-family: 'Fira Code', monospace;
+            color: var(--text-2);
+        }
+
+        .wf-steps {
+            margin-top: 0.4rem;
+            display: flex;
+            gap: 2px;
+        }
+
+        .wf-step {
+            flex: 1;
+            height: 3px;
+            border-radius: 1px;
+            background: var(--bg-3);
+        }
+
+        .wf-step.done { background: var(--slack-green); }
+        .wf-step.running { background: var(--bot-accent); animation: stepPulse 1s infinite; }
+
+        @keyframes stepPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Activity log */
+        .activity-item {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.68rem;
+            color: var(--text-2);
+            border-bottom: 1px solid rgba(57, 59, 64, 0.3);
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .act-time {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.55rem;
+            color: var(--text-2);
+            white-space: nowrap;
+        }
+
+        .act-text {
+            font-size: 0.65rem;
+            color: var(--text-1);
+        }
+
+        .emoji-react {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+            padding: 0.1rem 0.35rem;
+            background: var(--bg-2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 0.65rem;
+            margin-top: 0.3rem;
+            cursor: pointer;
+        }
+
+        .emoji-react:hover { border-color: var(--bot-accent); }
+
+        .react-count { font-size: 0.6rem; color: var(--text-2); }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="slack-layout">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="workspace-name"><div class="ws-status"></div> Gorgias HQ</div>
+                <div class="ws-sub">Decision Intelligence Team</div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-label">Channels</div>
+                <div class="channel-item active" onclick="selectChannel(this)">
+                    <span class="ch-hash">#</span> decision-bot
+                    <span class="ch-unread">5</span>
+                </div>
+                <div class="channel-item" onclick="selectChannel(this)">
+                    <span class="ch-hash">#</span> merchant-alerts
+                </div>
+                <div class="channel-item" onclick="selectChannel(this)">
+                    <span class="ch-hash">#</span> ai-agent-quality
+                </div>
+                <div class="channel-item" onclick="selectChannel(this)">
+                    <span class="ch-hash">#</span> data-eng
+                </div>
+                <div class="channel-item" onclick="selectChannel(this)">
+                    <span class="ch-hash">#</span> product
+                </div>
+                <div class="channel-item" onclick="selectChannel(this)">
+                    <span class="ch-hash">#</span> general
+                </div>
+                <div class="channel-item" onclick="selectChannel(this)">
+                    <span class="ch-hash">#</span> powerup
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-label">Direct Messages</div>
+                <div class="dm-item">
+                    <div class="dm-avatar" style="background: linear-gradient(135deg, #7c3aed, #3b82f6);">🤖</div>
+                    DecisionBot
+                    <div class="dm-status online"></div>
+                </div>
+                <div class="dm-item">
+                    <div class="dm-avatar" style="background: var(--bg-3);">RP</div>
+                    Romain L.
+                    <div class="dm-status online"></div>
+                </div>
+                <div class="dm-item">
+                    <div class="dm-avatar" style="background: var(--bg-3);">FJ</div>
+                    Firas J.
+                    <div class="dm-status online"></div>
+                </div>
+                <div class="dm-item">
+                    <div class="dm-avatar" style="background: var(--bg-3);">OM</div>
+                    Ognjen M.
+                    <div class="dm-status away"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat -->
+        <div class="main-chat">
+            <div class="chat-header">
+                <div class="ch-left">
+                    <div>
+                        <div class="ch-name"># decision-bot</div>
+                        <div class="ch-desc">Automated insights, alerts, and workflow commands from the Decision Engine</div>
+                    </div>
+                </div>
+                <div class="ch-right">
+                    <span class="ch-badge">LangGraph Agent</span>
+                    <span class="ch-badge">BigQuery</span>
+                </div>
+            </div>
+
+            <div class="messages-area" id="messagesArea">
+                <div class="day-divider"><span>Monday, February 3</span></div>
+
+                <!-- Automated morning digest -->
+                <div class="msg-group">
+                    <div class="msg-row">
+                        <div class="msg-avatar bot">⚡</div>
+                        <div class="msg-body">
+                            <div class="msg-header">
+                                <span class="msg-author bot-name">DecisionBot</span>
+                                <span class="msg-app">APP</span>
+                                <span class="msg-time">8:01 AM</span>
+                            </div>
+                            <div class="msg-text">☀️ <strong>Good morning, team!</strong> Here's your daily Merchant Health Digest for Monday, Feb 3.</div>
+                            <div class="bot-block">
+                                <div class="bb-title">📊 Daily Merchant Health Digest</div>
+                                <table class="bb-table">
+                                    <thead>
+                                        <tr><th>Metric</th><th>Today</th><th>vs 7d avg</th><th>Status</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td>Active Merchants</td><td><strong>14,892</strong></td><td class="td-g">+1.2%</td><td>✅</td></tr>
+                                        <tr><td>AI Resolution Rate</td><td><strong>61.4%</strong></td><td class="td-g">+3.2%</td><td>✅</td></tr>
+                                        <tr><td>Avg First Response</td><td><strong>18s</strong></td><td class="td-g">-4s</td><td>✅</td></tr>
+                                        <tr><td>Open Escalations</td><td><strong>342</strong></td><td class="td-y">+8.1%</td><td>⚠️</td></tr>
+                                        <tr><td>High-Risk Churn</td><td><strong>23 merchants</strong></td><td class="td-r">+3 new</td><td>🔴</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="bb-footer">
+                                    <button class="bb-btn primary" onclick="sendCommand('/digest detail')">📋 Full Report</button>
+                                    <button class="bb-btn" onclick="sendCommand('/churn-risk list')">🔍 Churn Details</button>
+                                    <button class="bb-btn" onclick="sendCommand('/escalations open')">📞 Escalations</button>
+                                </div>
+                            </div>
+                            <div class="emoji-react">👀 <span class="react-count">4</span></div>
+                            <div class="emoji-react">🔥 <span class="react-count">2</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Anomaly Alert -->
+                <div class="msg-group">
+                    <div class="msg-row">
+                        <div class="msg-avatar bot">⚡</div>
+                        <div class="msg-body">
+                            <div class="msg-header">
+                                <span class="msg-author bot-name">DecisionBot</span>
+                                <span class="msg-app">APP</span>
+                                <span class="msg-time">9:14 AM</span>
+                            </div>
+                            <div class="msg-text">🚨 <strong>Anomaly Detected</strong> — Sudden ticket volume spike for UrbanGear Co.</div>
+                            <div class="alert-block">
+                                <div class="bb-title">⚠️ Ticket Volume Anomaly — UrbanGear Co.</div>
+                                <table class="bb-table">
+                                    <thead>
+                                        <tr><th>Metric</th><th>Current</th><th>Normal</th><th>Delta</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td>Tickets/hour</td><td class="td-r"><strong>487</strong></td><td>142</td><td class="td-r">+243%</td></tr>
+                                        <tr><td>AI Resolution</td><td class="td-r"><strong>31%</strong></td><td>62%</td><td class="td-r">-50%</td></tr>
+                                        <tr><td>Queue Depth</td><td class="td-y"><strong>234</strong></td><td>18</td><td class="td-r">+1200%</td></tr>
+                                        <tr><td>CSAT (rolling)</td><td class="td-y"><strong>54.2</strong></td><td>78.1</td><td class="td-r">-30.6%</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="msg-text" style="font-size:0.72rem; margin-top:0.4rem; color:var(--text-1);">
+                                    <strong>Root cause analysis:</strong> 78% of new tickets reference "order stuck in processing" — likely related to UrbanGear's Shopify fulfillment API error. AI Agent is failing to resolve because it can't access real-time order status.
+                                </div>
+                                <div class="bb-footer">
+                                    <button class="bb-btn danger" onclick="sendCommand('/alert escalate urbangear')">🚨 Escalate to CSM</button>
+                                    <button class="bb-btn" onclick="sendCommand('/merchant urbangear tickets')">📊 View Tickets</button>
+                                    <button class="bb-btn" onclick="sendCommand('/alert acknowledge')">✓ Acknowledge</button>
+                                </div>
+                            </div>
+                            <div class="thread-replies" onclick="toggleThread()">
+                                <div class="thread-avatars">
+                                    <div class="mini-av" style="background:var(--bg-3);">RP</div>
+                                    <div class="mini-av" style="background:var(--bg-3);">FJ</div>
+                                </div>
+                                2 replies
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User command -->
+                <div class="msg-group">
+                    <div class="msg-row">
+                        <div class="msg-avatar user">RP</div>
+                        <div class="msg-body">
+                            <div class="msg-header">
+                                <span class="msg-author">Romain L.</span>
+                                <span class="msg-time">9:22 AM</span>
+                            </div>
+                            <div class="msg-text"><code style="background:var(--bg-2); padding:0.1rem 0.4rem; border-radius:3px; font-family:'Fira Code',monospace; font-size:0.8rem;">/trends support-topics this-week</code></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bot response to command -->
+                <div class="msg-group">
+                    <div class="msg-row">
+                        <div class="msg-avatar bot">⚡</div>
+                        <div class="msg-body">
+                            <div class="msg-header">
+                                <span class="msg-author bot-name">DecisionBot</span>
+                                <span class="msg-app">APP</span>
+                                <span class="msg-time">9:22 AM</span>
+                            </div>
+                            <div class="msg-text">📈 Here are the trending support topics this week across all merchants:</div>
+                            <div class="bot-block">
+                                <div class="bb-title">🔥 Trending Support Topics (This Week)</div>
+                                <table class="bb-table">
+                                    <thead>
+                                        <tr><th>#</th><th>Topic</th><th>Volume</th><th>Change</th><th>AI Res.</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td>1</td><td><strong>Order tracking</strong></td><td>12,847</td><td class="td-g">+4.2%</td><td class="td-g">78%</td></tr>
+                                        <tr><td>2</td><td><strong>Return/exchange</strong></td><td>8,421</td><td class="td-y">+12.1%</td><td class="td-y">54%</td></tr>
+                                        <tr><td>3</td><td><strong>Payment issues</strong></td><td>5,673</td><td class="td-r">+28.4%</td><td class="td-r">31%</td></tr>
+                                        <tr><td>4</td><td><strong>Product sizing</strong></td><td>4,102</td><td class="td-g">+2.1%</td><td class="td-g">82%</td></tr>
+                                        <tr><td>5</td><td><strong>Subscription changes</strong></td><td>3,894</td><td class="td-y">+8.7%</td><td class="td-y">61%</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="msg-text" style="font-size:0.72rem; margin-top:0.5rem; color:var(--text-1);">
+                                    ⚠️ <strong>Payment issues</strong> spiked 28.4% with only 31% AI resolution — likely related to the Stripe API outage yesterday. Recommend prioritizing prompt improvements for payment error handling.
+                                </div>
+                            </div>
+                            <div class="emoji-react">📊 <span class="react-count">3</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Success notification -->
+                <div class="msg-group">
+                    <div class="msg-row">
+                        <div class="msg-avatar bot">⚡</div>
+                        <div class="msg-body">
+                            <div class="msg-header">
+                                <span class="msg-author bot-name">DecisionBot</span>
+                                <span class="msg-app">APP</span>
+                                <span class="msg-time">10:45 AM</span>
+                            </div>
+                            <div class="msg-text">✅ <strong>Workflow Complete</strong> — Weekly AI Agent performance report generated and shared.</div>
+                            <div class="success-block">
+                                <div class="bb-title">📄 Weekly Report: AI Agent Performance (Jan 27 – Feb 2)</div>
+                                <table class="bb-table">
+                                    <tbody>
+                                        <tr><td>Conversations Evaluated</td><td><strong>4,218</strong></td></tr>
+                                        <tr><td>Overall QA Score</td><td class="td-g"><strong>87.3 / 100</strong></td></tr>
+                                        <tr><td>New Edge Cases</td><td class="td-y"><strong>3 identified</strong></td></tr>
+                                        <tr><td>Prompt Changes Deployed</td><td class="td-b"><strong>7 improvements</strong></td></tr>
+                                        <tr><td>Resolution Rate Impact</td><td class="td-g"><strong>+3.2% week-over-week</strong></td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="bb-footer">
+                                    <button class="bb-btn primary" onclick="showToast('Report opened in new tab')">📄 View Full Report</button>
+                                    <button class="bb-btn" onclick="showToast('Sent to #ai-agent-quality')">📤 Share to Channel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input -->
+            <div class="chat-input-area">
+                <div class="input-wrapper">
+                    <div class="input-row">
+                        <input class="chat-input" id="chatInput" type="text" 
+                               placeholder="Message #decision-bot or type / for commands..."
+                               onkeydown="if(event.key==='Enter')sendMessage()">
+                        <div class="input-actions">
+                            <button class="ia-btn" title="Attach">📎</button>
+                            <button class="ia-btn" title="Emoji">😊</button>
+                            <button class="ia-btn send" title="Send" onclick="sendMessage()">→</button>
+                        </div>
+                    </div>
+                    <div class="input-hint">
+                        <span class="slash-cmd" onclick="sendCommand('/digest')">/digest</span>
+                        <span class="slash-cmd" onclick="sendCommand('/churn-risk list')">/churn-risk</span>
+                        <span class="slash-cmd" onclick="sendCommand('/trends support-topics this-week')">/trends</span>
+                        <span class="slash-cmd" onclick="sendCommand('/merchant [name]')">/merchant</span>
+                        <span class="slash-cmd" onclick="sendCommand('/alert list')">/alert</span>
+                        <span class="slash-cmd" onclick="sendCommand('/report generate weekly')">/report</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel">
+            <div class="rp-header">⚡ Active Workflows</div>
+
+            <div class="workflow-card">
+                <div class="wf-top">
+                    <div class="wf-name">🌅 Daily Digest</div>
+                    <div class="wf-status active">Active</div>
+                </div>
+                <div class="wf-desc">Generates merchant health digest every morning at 8:00 AM CET.</div>
+                <div class="wf-meta">
+                    <span>⏰ 8:00 AM daily</span>
+                    <span>📊 BigQuery → Slack</span>
+                </div>
+                <div class="wf-steps">
+                    <div class="wf-step done"></div>
+                    <div class="wf-step done"></div>
+                    <div class="wf-step done"></div>
+                    <div class="wf-step done"></div>
+                </div>
+            </div>
+
+            <div class="workflow-card">
+                <div class="wf-top">
+                    <div class="wf-name">🚨 Anomaly Detection</div>
+                    <div class="wf-status active">Active</div>
+                </div>
+                <div class="wf-desc">Monitors ticket volume, resolution rates, CSAT for sudden changes every 15 min.</div>
+                <div class="wf-meta">
+                    <span>🔄 Every 15 min</span>
+                    <span>📈 z-score > 2.5</span>
+                </div>
+                <div class="wf-steps">
+                    <div class="wf-step done"></div>
+                    <div class="wf-step done"></div>
+                    <div class="wf-step running"></div>
+                    <div class="wf-step"></div>
+                </div>
+            </div>
+
+            <div class="workflow-card">
+                <div class="wf-top">
+                    <div class="wf-name">📄 Weekly QA Report</div>
+                    <div class="wf-status active">Active</div>
+                </div>
+                <div class="wf-desc">Compiles AI Agent evaluation scores, edge cases, and prompt changes weekly.</div>
+                <div class="wf-meta">
+                    <span>📅 Mondays 10:30 AM</span>
+                    <span>🔬 AgentQA → Slack</span>
+                </div>
+                <div class="wf-steps">
+                    <div class="wf-step done"></div>
+                    <div class="wf-step done"></div>
+                    <div class="wf-step done"></div>
+                    <div class="wf-step done"></div>
+                </div>
+            </div>
+
+            <div class="workflow-card">
+                <div class="wf-top">
+                    <div class="wf-name">⚡ Churn Watch</div>
+                    <div class="wf-status active">Active</div>
+                </div>
+                <div class="wf-desc">Flags merchants with risk score > 0.7 and declining usage. Notifies CSM team.</div>
+                <div class="wf-meta">
+                    <span>🔄 Hourly</span>
+                    <span>🎯 risk > 0.7</span>
+                </div>
+                <div class="wf-steps">
+                    <div class="wf-step done"></div>
+                    <div class="wf-step done"></div>
+                    <div class="wf-step running"></div>
+                    <div class="wf-step"></div>
+                    <div class="wf-step"></div>
+                </div>
+            </div>
+
+            <div class="workflow-card">
+                <div class="wf-top">
+                    <div class="wf-name">📊 On-Demand Reports</div>
+                    <div class="wf-status paused">On-demand</div>
+                </div>
+                <div class="wf-desc">Generates custom reports via slash commands. Supports revenue, support, and usage analyses.</div>
+                <div class="wf-meta">
+                    <span>🗣 Triggered by /report</span>
+                    <span>🧠 LangGraph</span>
+                </div>
+            </div>
+
+            <div class="rp-header" style="margin-top:0.5rem;">📝 Recent Activity</div>
+
+            <div class="activity-item">
+                <span class="act-time">10:45</span>
+                <span class="act-text">📄 Weekly report generated and posted</span>
+            </div>
+            <div class="activity-item">
+                <span class="act-time">9:22</span>
+                <span class="act-text">📈 /trends command by Romain L.</span>
+            </div>
+            <div class="activity-item">
+                <span class="act-time">9:14</span>
+                <span class="act-text">🚨 Anomaly alert: UrbanGear Co.</span>
+            </div>
+            <div class="activity-item">
+                <span class="act-time">8:01</span>
+                <span class="act-text">☀️ Daily digest posted</span>
+            </div>
+            <div class="activity-item">
+                <span class="act-time">7:45</span>
+                <span class="act-text">⚡ Churn watch: 2 new high-risk merchants</span>
+            </div>
+            <div class="activity-item">
+                <span class="act-time">7:00</span>
+                <span class="act-text">🔄 All workflows restarted</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Command responses ---
+        const commandResponses = {
+            '/digest': {
+                text: '📊 Refreshing today\'s digest...',
+                block: 'digest'
+            },
+            '/digest detail': {
+                text: '📋 Here\'s the detailed breakdown for today:',
+                block: 'digest-detail'
+            },
+            '/churn-risk list': {
+                text: '⚡ Here are the current high-risk merchants:',
+                block: 'churn'
+            },
+            '/alert list': {
+                text: '🔔 Active alerts:',
+                block: 'alerts'
+            },
+            '/alert escalate urbangear': {
+                text: '✅ Escalation triggered for UrbanGear Co.',
+                block: 'escalated'
+            },
+            '/alert acknowledge': {
+                text: '✓ Alert acknowledged. Monitoring will continue.',
+                block: null
+            },
+            '/merchant urbangear tickets': {
+                text: '🏪 UrbanGear Co. — Current ticket breakdown:',
+                block: 'merchant-detail'
+            },
+            '/report generate weekly': {
+                text: '⏳ Generating weekly report... This takes ~30 seconds.',
+                block: 'generating'
+            },
+        };
+
+        const blocks = {
+            'churn': `<div class="alert-block">
+                <div class="bb-title">⚡ High-Risk Churn Merchants (risk > 0.7)</div>
+                <table class="bb-table">
+                    <thead><tr><th>Merchant</th><th>MRR</th><th>Risk</th><th>Days Idle</th><th>Trend</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>LuxeHome Decor</strong></td><td>$4,200</td><td class="td-r">0.92</td><td class="td-r">18</td><td>↓↓↓</td></tr>
+                        <tr><td><strong>BrewCraft Supply</strong></td><td>$1,800</td><td class="td-r">0.87</td><td class="td-r">12</td><td>↓↓</td></tr>
+                        <tr><td><strong>GlowUp Skincare</strong></td><td>$3,600</td><td class="td-y">0.78</td><td class="td-y">7</td><td>↓</td></tr>
+                    </tbody>
+                </table>
+                <div style="font-size:0.7rem; color:var(--text-2); margin-top:0.4rem;">Total at-risk MRR: <strong style="color:var(--slack-red);">$9,600/mo</strong></div>
+                <div class="bb-footer">
+                    <button class="bb-btn primary" onclick="showToast('CSM alerts sent for all high-risk merchants')">🔔 Alert All CSMs</button>
+                    <button class="bb-btn" onclick="showToast('Export started')">📥 Export CSV</button>
+                </div>
+            </div>`,
+            'escalated': `<div class="success-block">
+                <div class="bb-title">✅ Escalation Created</div>
+                <table class="bb-table">
+                    <tbody>
+                        <tr><td>Merchant</td><td><strong>UrbanGear Co.</strong></td></tr>
+                        <tr><td>Assigned CSM</td><td><strong>Sarah K.</strong></td></tr>
+                        <tr><td>Priority</td><td class="td-r"><strong>P1 — Critical</strong></td></tr>
+                        <tr><td>Slack Thread</td><td class="td-b">#merchant-alerts</td></tr>
+                        <tr><td>Auto Follow-up</td><td>In 2 hours</td></tr>
+                    </tbody>
+                </table>
+            </div>`,
+            'merchant-detail': `<div class="bot-block">
+                <div class="bb-title">🏪 UrbanGear Co. — Live Ticket Status</div>
+                <table class="bb-table">
+                    <thead><tr><th>Topic</th><th>Open</th><th>AI Res.</th><th>Avg Wait</th></tr></thead>
+                    <tbody>
+                        <tr><td>Order stuck</td><td class="td-r"><strong>187</strong></td><td class="td-r">12%</td><td class="td-r">42min</td></tr>
+                        <tr><td>Refund request</td><td class="td-y"><strong>28</strong></td><td class="td-y">45%</td><td>18min</td></tr>
+                        <tr><td>Product inquiry</td><td><strong>12</strong></td><td class="td-g">71%</td><td>4min</td></tr>
+                        <tr><td>Other</td><td><strong>7</strong></td><td class="td-g">68%</td><td>8min</td></tr>
+                    </tbody>
+                </table>
+            </div>`,
+            'generating': null,
+        };
+
+        function selectChannel(el) {
+            document.querySelectorAll('.channel-item').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            const unread = el.querySelector('.ch-unread');
+            if (unread) unread.remove();
+        }
+
+        function sendCommand(cmd) {
+            document.getElementById('chatInput').value = cmd;
+            sendMessage();
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+
+            const area = document.getElementById('messagesArea');
+
+            // Add user message
+            const userMsg = document.createElement('div');
+            userMsg.className = 'msg-group';
+            userMsg.innerHTML = `
+                <div class="msg-row">
+                    <div class="msg-avatar user">You</div>
+                    <div class="msg-body">
+                        <div class="msg-header">
+                            <span class="msg-author">You</span>
+                            <span class="msg-time">${getCurrentTime()}</span>
+                        </div>
+                        <div class="msg-text"><code style="background:var(--bg-2); padding:0.1rem 0.4rem; border-radius:3px; font-family:'Fira Code',monospace; font-size:0.8rem;">${text}</code></div>
+                    </div>
+                </div>
+            `;
+            area.appendChild(userMsg);
+            area.scrollTop = area.scrollHeight;
+
+            // Find response
+            const response = commandResponses[text] || {
+                text: `I ran your query against BigQuery. Here's what I found:`,
+                block: 'generic'
+            };
+
+            // Add bot typing indicator then response
+            setTimeout(() => {
+                const botMsg = document.createElement('div');
+                botMsg.className = 'msg-group';
+
+                let blockHTML = '';
+                if (response.block && blocks[response.block]) {
+                    blockHTML = blocks[response.block];
+                } else if (response.block === 'generic') {
+                    blockHTML = `<div class="bot-block">
+                        <div class="bb-title">📊 Query Results</div>
+                        <div style="font-size:0.72rem; color:var(--text-1); line-height:1.5; padding:0.25rem 0;">
+                            Your query "<strong>${text}</strong>" was processed through the Decision Engine.
+                            Results have been fetched from BigQuery and are ready for review.
+                        </div>
+                        <div class="bb-footer">
+                            <button class="bb-btn primary" onclick="showToast('Opening detailed view...')">📋 View Details</button>
+                            <button class="bb-btn" onclick="showToast('Exported')">📥 Export</button>
+                        </div>
+                    </div>`;
+                }
+
+                botMsg.innerHTML = `
+                    <div class="msg-row">
+                        <div class="msg-avatar bot">⚡</div>
+                        <div class="msg-body">
+                            <div class="msg-header">
+                                <span class="msg-author bot-name">DecisionBot</span>
+                                <span class="msg-app">APP</span>
+                                <span class="msg-time">${getCurrentTime()}</span>
+                            </div>
+                            <div class="msg-text">${response.text}</div>
+                            ${blockHTML}
+                        </div>
+                    </div>
+                `;
+                area.appendChild(botMsg);
+                area.scrollTop = area.scrollHeight;
+            }, 800 + Math.random() * 600);
+        }
+
+        function getCurrentTime() {
+            const now = new Date();
+            let h = now.getHours();
+            const m = now.getMinutes().toString().padStart(2, '0');
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return `${h}:${m} ${ampm}`;
+        }
+
+        function showToast(msg) {
+            // Simple inline toast
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed; bottom: 1.5rem; right: 1.5rem;
+                background: var(--bg-2); border: 1px solid var(--border);
+                padding: 0.7rem 1rem; border-radius: 8px;
+                font-size: 0.78rem; color: var(--text-0);
+                box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+                z-index: 1000; animation: msgSlide 0.3s ease;
+            `;
+            toast.textContent = '✅ ' + msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function toggleThread() {
+            showToast('Thread view coming soon');
+        }
+
+        // Auto-scroll to bottom
+        document.getElementById('messagesArea').scrollTop = document.getElementById('messagesArea').scrollHeight;
+    </script>
+</body>
+</html>
